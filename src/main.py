@@ -1,7 +1,18 @@
 from fastapi import FastAPI
 
-from src.endpoints.public_router import public_routes
+from api.v1.endpoints.public_router import public_routes
+from messenger_services.telegram_service import telegram_routes
 
+version = "1.0.0"
 
-app = FastAPI()
-app.include_router(public_routes)
+app = FastAPI(
+    title="ThriveWell",
+    description="WhatsApp / Chatbot API for ThriveWell",
+    version=f"{version}",
+    openapi_url="/api/v1/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
+
+app.include_router(public_routes, prefix=f"/api/v{version[0]}", tags=["public"])
+app.include_router(telegram_routes, tags=["messenger services"])
