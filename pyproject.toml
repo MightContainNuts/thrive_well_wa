@@ -4,10 +4,13 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.13"
 dependencies = [
+    "alembic>=1.15.2",
     "fastapi>=0.115.12",
     "gunicorn>=23.0.0",
     "httpx>=0.28.1",
     "pre-commit>=4.2.0",
+    "psycopg2-binary>=2.9.10",
+    "pydantic[mail]>=2.11.3",
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
     "pytest-sugar>=1.0.0",
@@ -16,4 +19,10 @@ dependencies = [
     "requests>=2.32.3",
     "sqlmodel>=0.0.24",
     "uvicorn>=0.34.0",
+]
+
+[tool.ruff]
+exclude = [
+    "venv",
+    "versions",
 ]
