@@ -46,4 +46,3 @@ class Message(SQLModel, table=True):
     response_entity: ResponseEntity = Field(nullable=False)
     timestamp: int = Field(nullable=False)
     user: User = Relationship(back_populates="messages")
-    msg_text: str = Field(nullable=False)

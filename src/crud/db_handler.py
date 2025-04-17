@@ -94,18 +94,16 @@ class DataBaseHandler:
 
     def save_message(self, message_data: dict, user: User):
         """Save a message to the database."""
-        telegram_id = message_data.get("from", {}).get("id")
-        message = message_data.get("message", {}).get("text")
+        telegram_id = message_data.get("message", {}).get("from", {}).get("id")
+        message = test_data.get("message", {}).get("text")
         response_entity = "user" if not user.is_bot else "bot"
-        timestamp = message_data.get("date")
-        contents = message_data.get("text")
+        timestamp = test_data.get("message", {}).get("date")
 
         new_message = Message(
             telegram_id=telegram_id,
             message=message,
             response_entity=response_entity,
             timestamp=timestamp,
-            msg_text=contents,
         )
         self.session.add(new_message)
         self.session.commit()
@@ -131,6 +129,35 @@ class DataBaseHandler:
         print(f"Bot response saved: {new_message}")
 
 
+test_data = {
+    "update_id": 292484125,
+    "message": {
+        "message_id": 17,
+        "from": {
+            "id": 7594929889,
+            "is_bot": False,
+            "first_name": "Dean",
+            "last_name": "Didion",
+            "language_code": "en",
+        },
+        "chat": {
+            "id": 7594929889,
+            "first_name": "Dean",
+            "last_name": "Didion",
+            "type": "private",
+        },
+        "date": 1744802627,
+        "text": "Test",
+    },
+}
+
 if __name__ == "__main__":
-    with DataBaseHandler() as db_handler:
-        db_handler.create_engine()
+    telegram_id = test_data.get("message", {}).get("from", {}).get("id")
+    print(f"Telegram ID: {telegram_id}")
+    message = test_data.get("message", {}).get("text")
+    print(f"Message: {message}")
+    timestamp = test_data.get("message", {}).get("date")
+    print(f"Timestamp: {timestamp}")
+
+    # with DataBaseHandler() as db_handler:
+    #     db_handler.create_engine()
