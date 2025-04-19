@@ -1,6 +1,6 @@
-from src.main import app, version
 from fastapi.testclient import TestClient
 
+from src.main import app, version
 
 api_version = version[0]
 api_prefix = f"/api/v{api_version}"

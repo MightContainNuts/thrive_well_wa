@@ -5,6 +5,7 @@
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/alembic" />
     </content>
     <orderEntry type="jdk" jdkName="uv (thrive_well_fastapi)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
