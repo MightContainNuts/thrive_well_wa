@@ -1,0 +1,40 @@
+Incoming Telegram update: {
+    'update_id': 292484130,
+    'message': {
+        'message_id': 22,
+        'from': {
+            'id': 7594929889,
+            'is_bot': False,
+            'first_name': 'Dean',
+            'last_name': 'Didion',
+            'language_code': 'en'
+                                 },
+        'chat': {
+            'id': 7594929889,
+            'first_name': 'Dean',
+            'last_name': 'Didion',
+            'type': 'private'
+                },
+        'date': 1745060257,
+        'text': 'Tests'
+                }
+                        }
+response ={
+    "ok":true,
+    "result":{
+        "message_id":26,"from":{
+            "id":8116057140,
+            "is_bot":true,
+            "first_name":"vita.samaya",
+            "username":"vita_samaya_bot"
+                                },
+        "chat":{
+            "id":7594929889,
+            "first_name":"Dean",
+            "last_name":"Didion",
+            "type":"private"
+                },
+        "date":1745060513,
+        "text":"Hey, I received your message!"
+                }
+            }
