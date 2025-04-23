@@ -1,12 +1,11 @@
 from datetime import datetime
-
+import tempfile
 from sqlmodel import select, SQLModel
 
 from src.crud.db_handler import DataBaseHandler
 from src.models.models import User, Message, ResponseEntity
 import pytest
 
-test_db_url = "sqlite:///test_db.sqlite"
 
 test_data = {
     "update_id": 292484130,
@@ -54,13 +53,12 @@ bot_test_data = {
 
 @pytest.fixture(autouse=True)
 def setup_and_teardown():
-    with DataBaseHandler(test_db_url) as db_handler:
-        # Setup
-        SQLModel.metadata.drop_all(db_handler.engine)
-        SQLModel.metadata.create_all(db_handler.engine)
-        yield db_handler
-        # Teardown (optional cleanup)
-        db_handler.session.close()
+    with tempfile.NamedTemporaryFile(delete=False) as temp_db_file:
+        test_db_url = f"sqlite:///{temp_db_file.name}"
+        with DataBaseHandler(test_db_url) as db_handler:
+            SQLModel.metadata.create_all(db_handler.engine)
+            yield db_handler
+            db_handler.session.close()
 
 
 def test_create_new_user(setup_and_teardown):
