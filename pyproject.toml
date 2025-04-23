@@ -8,9 +8,11 @@ dependencies = [
     "fastapi>=0.115.12",
     "gunicorn>=23.0.0",
     "httpx>=0.28.1",
+    "langgraph>=0.3.31",
+    "openai>=1.75.0",
     "pre-commit>=4.2.0",
+    "pydantic>=2.11.3",
     "psycopg2-binary>=2.9.10",
-    "pydantic[mail]>=2.11.3",
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
     "pytest-sugar>=1.0.0",
@@ -19,6 +21,14 @@ dependencies = [
     "requests>=2.32.3",
     "sqlmodel>=0.0.24",
     "uvicorn>=0.34.0",
+    "langchain-openai>=0.3.14",
+    "langmem>=0.0.24",
+    "pyppeteer>=2.0.0",
+    "langchain-community>=0.3.22",
+    "pyowm>=3.3.0",
+    "wikipedia>=1.4.0",
+    "setuptools==76.0.0",
+    "tavily-python>=0.5.4",
 ]
 
 [tool.ruff]
