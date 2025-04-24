@@ -43,7 +43,8 @@ async def telegram_webhook(req: Request):
     response = requests.post(
         message_url, json={"chat_id": telegram_id, "text": ai_response}
     )
-    print(response.status_code, response.text)
+
+    print(f"Status code: {response.status_code} |", ai_response)
     with DataBaseHandler() as db_handler:
         db_handler.save_bot_response(response.json())
 
