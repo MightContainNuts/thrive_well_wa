@@ -19,6 +19,7 @@ from src.services.tools import (
     get_tavily_search_tool,
     calendar_events_handler,
 )
+from pathlib import Path
 
 import json
 import uuid
@@ -138,8 +139,9 @@ class LangGraphHandler:
     @staticmethod
     def _load_guidelines():
         """Load assistant guidelines from file."""
+        base_path = Path(__file__).parent.parent.parent / "src" / "services"
         try:
-            guidelines_path = "guidelines.json"
+            guidelines_path = f"{base_path}/guidelines.json"
             with open(guidelines_path, "r") as file:
                 return json.load(file)
         except Exception as e:
