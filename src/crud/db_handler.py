@@ -107,6 +107,17 @@ class DataBaseHandler:
             print(f"User found: {user.user_id} {user.telegram_id}")
         return user
 
+    def get_user_from_id(self, telegram_id: int) -> Optional[User]:
+        """Get a user by telegram id."""
+        user = self.session.exec(
+            select(User).where(User.telegram_id == telegram_id)
+        ).first()
+        if user is None:
+            print(f"User with ID {telegram_id} not found.")
+        else:
+            print(f"User found: {user.user_id} {user.telegram_id}")
+        return user
+
     def get_all_users(self) -> list[User]:
         """Get all users from the database."""
         users = self.session.exec(select(User)).all()
@@ -230,3 +241,27 @@ class DataBaseHandler:
             print(f"Bot user with ID {8116057140} not found.")
 
         return bot
+
+    def get_chat_summary_from_db(self, telegram_id: int) -> Optional[str | None]:
+        """Get chat history from the database."""
+        chat_summary = self.session.exec(
+            select(User).where(User.telegram_id == telegram_id)
+        ).first()
+
+        return chat_summary.chat_summary if chat_summary else None
+
+    def write_chat_summary_to_db(
+        self,
+        telegram_id: int,
+        summary: str,
+    ) -> None:
+        """Write a chat message to the chat history table."""
+        user = self.get_user_from_id(telegram_id)
+        if user:
+            user.chat_summary = summary
+            self.session.commit()
+
+        print(f"chat_history: {telegram_id}:")
+        print("-" * 50)
+        print(summary)
+        print("-" * 50)

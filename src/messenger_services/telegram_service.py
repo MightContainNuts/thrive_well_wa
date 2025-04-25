@@ -11,7 +11,6 @@ telegram_routes = APIRouter()
 load_dotenv()
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 message_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-lhh = LangGraphHandler()
 
 
 @telegram_routes.post("/webhook")
