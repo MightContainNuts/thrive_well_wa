@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 from typing import Optional
+from torch import Tensor
 
 from dotenv import load_dotenv
 from sqlmodel import SQLModel, create_engine, Session, select
@@ -130,6 +131,7 @@ class DataBaseHandler:
         ai_response: str,
         evaluation: int,
         timestamp: int,
+        embeddings: Tensor,
     ) -> None:
         """Save a message to the database."""
 
@@ -139,6 +141,7 @@ class DataBaseHandler:
             ai_response=ai_response,
             evaluation=evaluation,
             timestamp=timestamp,
+            embeddings=embeddings,
         )
         self.session.add(new_message)
         self.session.commit()

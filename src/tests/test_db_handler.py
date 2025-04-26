@@ -3,9 +3,11 @@ import tempfile
 from sqlmodel import select, SQLModel
 
 from src.crud.db_handler import DataBaseHandler
+from src.services.langgraph_handler import LangGraphHandler
 from src.models.models import User, Message
 import pytest
 
+lg_handler = LangGraphHandler()
 
 test_data = {
     "update_id": 292484130,
@@ -111,12 +113,14 @@ def test_save_message(setup_and_teardown):
     test_evaluation = 85
     timestamp = test_data["message"]["date"]
     test_telegram_id = test_data["message"]["from"]["id"]
+    embeddings = lg_handler.create_embedding(test_user_query, test_ai_response)
     db_handler.save_message(
         user_query=test_user_query,
         ai_response=test_ai_response,
         evaluation=test_evaluation,
         telegram_id=test_telegram_id,
         timestamp=timestamp,
+        embeddings=embeddings,
     )
     user = db_handler.get_user(test_data)
 
@@ -141,12 +145,14 @@ def test_retrieve_messages_by_user(setup_and_teardown):
     test_evaluation = 85
     timestamp = test_data["message"]["date"]
     test_telegram_id = test_data["message"]["from"]["id"]
+    embeddings = lg_handler.create_embedding(test_user_query, test_ai_response)
     db_handler.save_message(
         user_query=test_user_query,
         ai_response=test_ai_response,
         evaluation=test_evaluation,
         telegram_id=test_telegram_id,
         timestamp=timestamp,
+        embeddings=embeddings,
     )
 
     messages = db_handler.retrieve_messages_by_user(user)

@@ -29,6 +29,8 @@ dependencies = [
     "wikipedia>=1.4.0",
     "setuptools==76.0.0",
     "tavily-python>=0.5.4",
+    "sentence-transformers>=4.1.0",
+    "pgvector>=0.4.0",
 ]
 
 [tool.ruff]

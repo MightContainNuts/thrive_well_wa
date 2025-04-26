@@ -36,13 +36,14 @@ async def telegram_webhook(req: Request):
     response = requests.post(
         message_url, json={"chat_id": telegram_id, "text": ai_response}
     )
-
+    embeddings = lbh.create_embedding(user_query=user_query, ai_response=ai_response)
     with DataBaseHandler() as db_handler:
         db_handler.save_message(
             telegram_id=telegram_id,
             user_query=user_query,
             ai_response=ai_response,
             evaluation=evaluation,
+            embeddings=embeddings,
             timestamp=timestamp,
         )
 

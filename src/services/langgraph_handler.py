@@ -10,7 +10,7 @@ from langchain_core.messages import (
     AIMessage,
     SystemMessage,
 )
-
+from torch import Tensor
 from langchain_core.runnables.graph_mermaid import MermaidDrawMethod
 
 from langgraph.prebuilt import create_react_agent
@@ -25,6 +25,8 @@ from src.services.tools import (
     calendar_events_handler,
 )
 from src.crud.db_handler import DataBaseHandler
+
+from sentence_transformers import SentenceTransformer
 
 from pathlib import Path
 
@@ -281,3 +283,11 @@ class LangGraphHandler:
         print(f"Response accuracy: {evaluation['evaluation_success']} %")
 
         return evaluation["evaluation_success"]
+
+    @staticmethod
+    def create_embedding(user_query: str, ai_response: str) -> Tensor:
+        """Create an embedding for the given text."""
+        text = f"User: {user_query}, AI: {ai_response}"
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+        embedding = model.encode(text)
+        return embedding

@@ -1,10 +1,11 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 from uuid import UUID, uuid4
+from pgvector.sqlalchemy import Vector
 
-from sqlalchemy import BigInteger, Column
+from sqlalchemy import BigInteger, Column, ForeignKey
 from sqlmodel import Field, SQLModel, Relationship
+from typing import Optional, List
 
 
 class UserRole(str, Enum):
@@ -35,7 +36,12 @@ class User(SQLModel, table=True):
     updated_on: datetime = Field(default_factory=datetime.now)
     role: UserRole = Field(default=UserRole.USER, nullable=False)
     # telegram info
-    telegram_id: int = Field(sa_column=Column(BigInteger, unique=True, nullable=False))
+    telegram_id: int = Field(
+        sa_column=Column(
+            BigInteger,
+            primary_key=True,
+        )
+    )
     is_bot: bool = Field(default=False, nullable=False)
     chat_summary: str = Field(default=None, nullable=False)
     messages: list["Message"] = Relationship(back_populates="user")
@@ -45,10 +51,19 @@ class Message(SQLModel, table=True):
     """Chat summary model for the application."""
 
     message_id: UUID = Field(default_factory=uuid4, primary_key=True)
-
-    telegram_id: int = Field(foreign_key="user.telegram_id")
+    telegram_id: int = Field(
+        sa_column=Column(
+            BigInteger,
+            ForeignKey("user.telegram_id"),
+            index=True,
+            unique=False,
+        )
+    )
     user_query: str = Field(nullable=False)
     ai_response: str = Field(nullable=False)
     evaluation: int = Field(nullable=False)
     timestamp: int = Field(BigInteger, nullable=False)
+    embeddings: Optional[List[float]] = Field(
+        sa_column=Column(Vector(384), nullable=True)
+    )
     user: User = Relationship(back_populates="messages")
