@@ -3,7 +3,7 @@ import tempfile
 from sqlmodel import select, SQLModel
 
 from src.crud.db_handler import DataBaseHandler
-from src.models.models import User, Message, ResponseEntity
+from src.models.models import User, Message
 import pytest
 
 
@@ -106,14 +106,28 @@ def test_save_message(setup_and_teardown):
     db_handler = setup_and_teardown
 
     # Test saving a message
-    db_handler.create_new_user(test_data)
-    db_handler.save_message(test_data)
-    user = db_handler.get_user(test_data)
+    test_user_query = "test user query"
+    test_ai_response = "test ai response"
+    test_evaluation = 85
     timestamp = test_data["message"]["date"]
+    test_telegram_id = test_data["message"]["from"]["id"]
+    db_handler.save_message(
+        user_query=test_user_query,
+        ai_response=test_ai_response,
+        evaluation=test_evaluation,
+        telegram_id=test_telegram_id,
+        timestamp=timestamp,
+    )
+    user = db_handler.get_user(test_data)
+
     test_message = db_handler.retrieve_message_by_user_timestamp(user, timestamp)
     print(f"{test_message=}")
     assert test_message is not None
-    assert test_message == test_data["message"]["text"]
+    assert test_message.user_query == test_user_query
+    assert test_message.ai_response == test_ai_response
+    assert test_message.evaluation == test_evaluation
+    assert test_message.telegram_id == test_telegram_id
+    assert test_message.timestamp == timestamp
 
 
 def test_retrieve_messages_by_user(setup_and_teardown):
@@ -122,16 +136,27 @@ def test_retrieve_messages_by_user(setup_and_teardown):
     db_handler.create_new_user(test_data)
     # Test retrieving messages by user and timestamp
     user = db_handler.get_user(test_data)
-    db_handler.save_message(test_data)
+    test_user_query = "test user query"
+    test_ai_response = "test ai response"
+    test_evaluation = 85
+    timestamp = test_data["message"]["date"]
+    test_telegram_id = test_data["message"]["from"]["id"]
+    db_handler.save_message(
+        user_query=test_user_query,
+        ai_response=test_ai_response,
+        evaluation=test_evaluation,
+        telegram_id=test_telegram_id,
+        timestamp=timestamp,
+    )
 
     messages = db_handler.retrieve_messages_by_user(user)
     assert messages is not None
     assert len(messages) >= 1
     for message in messages:
         assert isinstance(message, Message)
-        assert isinstance(message.message, str)
+        assert isinstance(message.user_query, str)
+        assert isinstance(message.ai_response, str)
         assert isinstance(message.timestamp, int)
-        assert isinstance(message.response_entity, ResponseEntity)
         assert message.telegram_id == user.telegram_id
 
 
@@ -159,21 +184,3 @@ def test_delete_user(setup_and_teardown):
         select(User).where(User.telegram_id == user.telegram_id)
     ).first()
     assert deleted_user is None
-
-
-def test_save_bot_response(setup_and_teardown):
-    """Test the save_bot_response method."""
-    db_handler = setup_and_teardown
-
-    db_handler.create_bot_user_account()
-    # Test saving a bot response
-    db_handler.save_bot_response(bot_test_data)
-    telegram_id = bot_test_data["result"]["from"]["id"]
-    timestamp = bot_test_data["result"]["date"]
-    test_message = db_handler.session.exec(
-        select(Message).where(
-            Message.telegram_id == telegram_id, Message.timestamp == timestamp
-        )
-    ).first()
-    assert test_message is not None
-    assert test_message.message == bot_test_data["result"]["text"]

@@ -43,7 +43,7 @@ class DataBaseHandler:
 
     def create_engine(self):
         """Create the database engine."""
-        self.engine = create_engine(self.db_url, echo=True)
+        self.engine = create_engine(self.db_url, echo=False)
 
     def create_session(self):
         """Create a session for the database."""
@@ -123,49 +123,26 @@ class DataBaseHandler:
         users = self.session.exec(select(User)).all()
         return users
 
-    def save_message(self, message_data: dict):
+    def save_message(
+        self,
+        telegram_id: int,
+        user_query: str,
+        ai_response: str,
+        evaluation: int,
+        timestamp: int,
+    ) -> None:
         """Save a message to the database."""
-        telegram_id = message_data.get("message", {}).get("from", {}).get("id")
-        message = message_data.get("message", {}).get("text")
-        response_entity = (
-            "user"
-            if not message_data.get("message", {}).get("from", {}).get("is_bot")
-            else "bot"
-        )
-        timestamp = message_data.get("message", {}).get("date")
-
-        print(f"Extracted Telegram ID: {telegram_id}")  # Debugging line
-        print(f"Extracted Timestamp: {timestamp}")
-
-        if telegram_id is None:
-            raise ValueError("telegram_id is missing in the message data")
 
         new_message = Message(
             telegram_id=telegram_id,
-            message=message,
-            response_entity=response_entity,
+            user_query=user_query,
+            ai_response=ai_response,
+            evaluation=evaluation,
             timestamp=timestamp,
         )
         self.session.add(new_message)
         self.session.commit()
         print(f"Message saved: {new_message}")
-
-    def save_bot_response(self, response_data: dict):
-        """Save a bot response to the database."""
-        telegram_id = response_data.get("result", {}).get("from", {}).get("id")
-        message = response_data.get("result", {}).get("text")
-        response_entity = "bot"
-        timestamp = response_data.get("result", {}).get("date")
-
-        new_message = Message(
-            telegram_id=telegram_id,
-            message=message,
-            response_entity=response_entity,
-            timestamp=timestamp,
-        )
-        self.session.add(new_message)
-        self.session.commit()
-        print(f"Bot response saved: {new_message}")
 
     def retrieve_messages_by_user(self, user: User) -> list[Message]:
         """Retrieve messages for a given telegram id."""
@@ -182,10 +159,11 @@ class DataBaseHandler:
         """Retrieve messages for a given telegram id."""
         result = self.session.exec(
             select(Message).where(
-                Message.telegram_id == user.telegram_id, Message.timestamp == timestamp
+                (Message.telegram_id == user.telegram_id)
+                & (Message.timestamp == timestamp)
             )
         ).first()
-        return result.message if result else None
+        return result if result else None
 
     def delete_all_user_messages(self, user) -> None:
         """Delete all messages for a given telegram id."""
@@ -260,8 +238,3 @@ class DataBaseHandler:
         if user:
             user.chat_summary = summary
             self.session.commit()
-
-        print(f"chat_history: {telegram_id}:")
-        print("-" * 50)
-        print(summary)
-        print("-" * 50)

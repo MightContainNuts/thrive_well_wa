@@ -47,7 +47,8 @@ class Message(SQLModel, table=True):
     message_id: UUID = Field(default_factory=uuid4, primary_key=True)
 
     telegram_id: int = Field(foreign_key="user.telegram_id")
-    message: str = Field(nullable=False)
-    response_entity: ResponseEntity = Field(nullable=False)
-    timestamp: int = Field(nullable=False)
+    user_query: str = Field(nullable=False)
+    ai_response: str = Field(nullable=False)
+    evaluation: int = Field(nullable=False)
+    timestamp: int = Field(BigInteger, nullable=False)
     user: User = Relationship(back_populates="messages")

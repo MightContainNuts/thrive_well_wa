@@ -18,6 +18,7 @@ async def telegram_webhook(req: Request):
     data = await req.json()
     telegram_id = data["message"]["from"]["id"]
     user_query = data.get("message", {}).get("text")
+    timestamp = data.get("message", {}).get("date")
     if not user_query or not isinstance(user_query, str):
         response = requests.post(
             message_url,
@@ -28,28 +29,27 @@ async def telegram_webhook(req: Request):
         )
         print(response.status_code, response.text)
         return {"Status": "No message found"}
-    print("Incoming Telegram update:", user_query)
-    with DataBaseHandler() as db_handler:
-        user = db_handler.get_user(
-            data
-        )  # TODO temp function - look into the /start command
-        print(f"DEBUG: User: {user}")
-        db_handler.save_message(data)
 
     lbh = LangGraphHandler(telegram_id=telegram_id)
-    ai_response = lbh.chatbot_handler(user_query=user_query)
+    ai_response, evaluation = lbh.chatbot_handler(user_query=user_query)
 
     response = requests.post(
         message_url, json={"chat_id": telegram_id, "text": ai_response}
     )
 
-    print(f"Status code: {response.status_code} |", ai_response)
     with DataBaseHandler() as db_handler:
-        db_handler.save_bot_response(response.json())
+        db_handler.save_message(
+            telegram_id=telegram_id,
+            user_query=user_query,
+            ai_response=ai_response,
+            evaluation=evaluation,
+            timestamp=timestamp,
+        )
 
     return {
         "Status": response.status_code,
         "chat_id": telegram_id,
         "query": user_query,
         "Response": ai_response,
+        "Evaluation": f"{evaluation} %",
     }

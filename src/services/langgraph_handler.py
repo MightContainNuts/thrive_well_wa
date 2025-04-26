@@ -32,7 +32,7 @@ import json
 import uuid
 
 from typing import Annotated
-from typing_extensions import TypedDict
+from typing_extensions import TypedDict, Tuple
 
 chats_by_session_id = {}
 
@@ -128,7 +128,7 @@ class LangGraphHandler:
                 )
             )
 
-    def chatbot_handler(self, user_query: str) -> str:
+    def chatbot_handler(self, user_query: str) -> Tuple[str, int]:
         """Handles the chatbot interaction."""
         chat_history = self._get_chat_history()
         chat_history.add_user_message(user_query)
@@ -139,9 +139,13 @@ class LangGraphHandler:
         appropriate and provide relevant information. Be precise and concise.
         """
         )
+        print("processing user query...")
+        print(f"User query: {user_query}")
+
         messages = chat_history.messages + [
             system_message,
             HumanMessage(content=user_query),
+            self.summary,
         ]
 
         state = {
@@ -161,11 +165,20 @@ class LangGraphHandler:
             m.content for m in result["messages"] if isinstance(m, AIMessage)
         ]
 
-        return (
+        ai_response = (
             ai_responses[-1]
             if ai_responses
-            else "Sorry, I couldn't generate a response."
+            else "sorry, I couldn't generate a response."
         )
+        print(f"AI response: {ai_response}")
+        evaluation = self._evaluate_response(
+            user_query=user_query, ai_response=ai_response
+        )
+
+        self.summary = self._update_summary(user_query, ai_response)
+        self._save_summary_to_db(self.summary)
+
+        return ai_response, int(evaluation)
 
     def main(self, user_query: str):
         response = self.chatbot_handler(user_query)
@@ -205,76 +218,38 @@ class LangGraphHandler:
         agent = self.create_agent()
 
         workflow.add_node("validate_query", self.validate_query)
+
         workflow.add_node("agent", agent)
-        workflow.add_node("summarize", self._update_summary)
-        workflow.add_node("save_summary", self._save_summary_to_db)
-        workflow.add_node("evaluate_response", self.evaluate_response)
 
         workflow.add_edge(START, "validate_query")
         workflow.add_conditional_edges(
             "validate_query",
             lambda state: "agent" if state["metadata"].get("is_valid", True) else END,
         )
-        workflow.add_edge("agent", "summarize")
-        workflow.add_edge("summarize", "evaluate_response")
-        workflow.add_edge("evaluate_response", "save_summary")
-        workflow.add_edge("save_summary", END)
+        workflow.add_edge("agent", END)
 
         return workflow.compile()
 
-    def _update_summary(self, state: State) -> State:
+    def _update_summary(self, user_query, ai_response) -> str:
         """Update the conversation summary."""
-        print("Updating Summary:")
-        try:
-            if len(state["messages"]) >= 2:  # Ensure sufficient history
-                # Get the most recent user and assistant messages
-                recent_messages = state["messages"][-2:]
+        print("Updating Summary...")
+        summary_prompt = f"""
+        Previous summary: {self.summary}
+        New exchange:
+        User: {user_query}, AI: {ai_response} ,
+        Provide a concise summary of the entire conversation so far. Mote Places, dates, names, and other entities
+        """
+        # Generate new summary
+        new_summary = self.llm.invoke([HumanMessage(content=summary_prompt)])
+        print(f"New summary:\n{new_summary.content}")
+        return new_summary.content
 
-                # Format the messages for the summary prompt
-                user_msg = ""
-                ai_msg = ""
-                for msg in recent_messages:
-                    if isinstance(msg, HumanMessage):
-                        user_msg = msg.content
-                    elif isinstance(msg, AIMessage):
-                        ai_msg = msg.content
-
-                # Create a summary prompt for the LLM
-                summary_prompt = f"""
-                Previous summary: {state["summary"]}
-
-                New exchange:
-                User: {user_msg}
-                Assistant: {ai_msg}
-
-                Provide a concise summary of the entire conversation so far.
-                """
-
-                # Generate new summary
-                summary_response = self.llm.invoke(
-                    [HumanMessage(content=summary_prompt)]
-                )
-
-                # Return the updated state with the new summary
-                return {
-                    "messages": state["messages"],
-                    "summary": summary_response.content,
-                    "metadata": state["metadata"],
-                    "telegram_id": self.telegram_id,
-                }
-            return state
-        except Exception as e:
-            print(f"Error updating summary: {e}")
-            return state
-
-    def _save_summary_to_db(self, state: State) -> None:
+    def _save_summary_to_db(self, summary) -> None:
         """Save the summary to the database."""
-        print("Saving chat summary to the database")
-        telegram_id = state["telegram_id"]
-        summary = state["summary"]
+        print("Saving chat summary to the database...")
         with DataBaseHandler() as db_handler:
             db_handler.write_chat_summary_to_db(
-                telegram_id=telegram_id,
+                telegram_id=self.telegram_id,
                 summary=summary,
             )
 
@@ -286,12 +261,9 @@ class LangGraphHandler:
             chats_by_session_id[self.telegram_id] = chat_history
         return chat_history
 
-    def evaluate_response(self, state: State) -> State:
+    def _evaluate_response(self, user_query, ai_response) -> str:
         "evaluate response against query"
-        print("Evaluating response")
-
-        user_query = state["messages"][-2].content
-        ai_response = state["messages"][-1].content
+        print("Evaluating response...")
 
         evaluation_prompt = f"""
 
@@ -306,12 +278,6 @@ class LangGraphHandler:
             [SystemMessage(content=evaluation_prompt)]
         )
 
-        print(f"Response accuracy: {evaluation} %")
+        print(f"Response accuracy: {evaluation['evaluation_success']} %")
 
-        return state
-
-
-if __name__ == "__main__":
-    lgh = LangGraphHandler(7594929889)
-
-    lgh.main("What does my name mean  ?")
+        return evaluation["evaluation_success"]
