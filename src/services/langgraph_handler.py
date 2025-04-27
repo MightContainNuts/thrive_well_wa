@@ -15,7 +15,6 @@ from langchain_core.runnables.graph_mermaid import MermaidDrawMethod
 from langchain_postgres.vectorstores import PGVector
 from langgraph.prebuilt import create_react_agent
 from langmem import create_manage_memory_tool, create_search_memory_tool
-from langchain_core.tools import tool
 from dotenv import load_dotenv
 
 from src.services.tools import (
@@ -144,10 +143,24 @@ class LangGraphHandler:
         )
         print("processing user query...")
         print(f"User query: {user_query}")
+        print("Checking chat history...")
+        similar_queries = self.search_chat_history(user_query, self.telegram_id)
+        similar_content = ""
+        if similar_queries:
+            print("Found similar messages in chat history:")
+            for entry, score in similar_queries:
+                print(
+                    f"Message: {entry.page_content}, Meta: {entry.metadata}, Score: {score}"
+                )
+                similar_content += entry.page_content
+            # Add the most relevant message to the chat history
+        else:
+            print("No similar messages found in chat history.")
 
-        messages = chat_history.messages + [
+        messages = [
             system_message,
             HumanMessage(content=user_query),
+            HumanMessage(content=similar_content),
             self.summary,
         ]
 
@@ -301,12 +314,6 @@ class LangGraphHandler:
         embedding = model.encode(user_query)
         return embedding
 
-    @tool
-    def search_chat_history(self, embedded_user_query: Tensor) -> list[str]:
-        """Search the chat history for relevant messages."""
-        print("Searching chat history...")
-        pass
-
     def add_to_chat_vector_store(self, user_query: str, ai_response: str) -> None:
         """Add the user query and AI response to the chat vector store."""
         print("Adding to chat vector store...")
@@ -334,6 +341,32 @@ class LangGraphHandler:
             metadatas=[{"telegram_id": self.telegram_id}],
             namespace=self.telegram_id,
         )
+
+        # Save the embeddings to the database
+
+    def search_chat_history(
+        self, user_query: str, telegram_id: int
+    ) -> list[dict[str, str]]:
+        """Search the chat history for relevant messages."""
+        print("Searching chat history...")
+        # Load environment variables
+        load_dotenv()
+        connection_string = os.getenv("DATABASE_URL")
+
+        # Create PGVector using the embeddings
+        vector_store = PGVector(
+            connection=connection_string,
+            collection_name="chat_history",
+            use_jsonb=True,
+            embeddings=EmbeddingFunctionWrapper("all-MiniLM-L6-v2"),
+        )
+
+        # Search for similar messages in the vector store
+        results = vector_store.similarity_search_with_score(
+            query=user_query,
+            k=5,
+        )
+        return results
 
 
 class EmbeddingFunctionWrapper:
