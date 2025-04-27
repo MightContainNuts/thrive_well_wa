@@ -12,10 +12,10 @@ from langchain_core.messages import (
 )
 from torch import Tensor
 from langchain_core.runnables.graph_mermaid import MermaidDrawMethod
-
+from langchain_postgres.vectorstores import PGVector
 from langgraph.prebuilt import create_react_agent
 from langmem import create_manage_memory_tool, create_search_memory_tool
-
+from langchain_core.tools import tool
 from dotenv import load_dotenv
 
 from src.services.tools import (
@@ -32,6 +32,7 @@ from pathlib import Path
 
 import json
 import uuid
+import os
 
 from typing import Annotated
 from typing_extensions import TypedDict, Tuple
@@ -179,6 +180,7 @@ class LangGraphHandler:
 
         self.summary = self._update_summary(user_query, ai_response)
         self._save_summary_to_db(self.summary)
+        self.add_to_chat_vector_store(user_query, ai_response)
 
         return ai_response, int(evaluation)
 
@@ -291,3 +293,57 @@ class LangGraphHandler:
         model = SentenceTransformer("all-MiniLM-L6-v2")
         embedding = model.encode(text)
         return embedding
+
+    @staticmethod
+    def create_user_query_embedding(user_query: str) -> Tensor:
+        """Create an embedding for the user query."""
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+        embedding = model.encode(user_query)
+        return embedding
+
+    @tool
+    def search_chat_history(self, embedded_user_query: Tensor) -> list[str]:
+        """Search the chat history for relevant messages."""
+        print("Searching chat history...")
+        pass
+
+    def add_to_chat_vector_store(self, user_query: str, ai_response: str) -> None:
+        """Add the user query and AI response to the chat vector store."""
+        print("Adding to chat vector store...")
+
+        # Load environment variables
+        load_dotenv()
+        connection_string = os.getenv("DATABASE_URL")
+
+        # The text that will be added to the chat vector store
+        text = f"User: {user_query}, AI: {ai_response}"
+
+        # Generate embeddings for the text using the SentenceTransformer model
+        embedding_function = EmbeddingFunctionWrapper("all-MiniLM-L6-v2")
+
+        # Create PGVector using the embeddings
+        vector_store = PGVector(
+            connection=connection_string,
+            collection_name="chat_history",  # Use the wrapper for embedding
+            use_jsonb=True,
+            embeddings=embedding_function,
+        )
+        # Add the text data along with the embeddings
+        vector_store.add_texts(
+            texts=[text],
+            metadatas=[{"telegram_id": self.telegram_id}],
+            namespace=self.telegram_id,
+        )
+
+
+class EmbeddingFunctionWrapper:
+    def __init__(self, model_name: str):
+        self.model = SentenceTransformer(model_name)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        # Use the encode method to generate embeddings
+        return self.model.encode(texts, convert_to_tensor=False)
+
+    def embed_query(self, text: str) -> list[float]:
+        # For single query embedding
+        return self.model.encode(text, convert_to_tensor=False)
