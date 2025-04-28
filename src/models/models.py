@@ -1,11 +1,10 @@
 from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
-from pgvector.sqlalchemy import Vector
 
 from sqlalchemy import BigInteger, Column, ForeignKey
 from sqlmodel import Field, SQLModel, Relationship
-from typing import Optional, List
+from typing import Optional
 
 
 class UserRole(str, Enum):
@@ -63,7 +62,5 @@ class Message(SQLModel, table=True):
     ai_response: str = Field(nullable=False)
     evaluation: int = Field(nullable=False)
     timestamp: int = Field(BigInteger, nullable=False)
-    embeddings: Optional[List[float]] = Field(
-        sa_column=Column(Vector(384), nullable=True)
-    )
+
     user: User = Relationship(back_populates="messages")

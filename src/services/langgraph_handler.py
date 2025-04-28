@@ -3,14 +3,12 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.state import CompiledGraph
 from langgraph.graph.message import add_messages
-from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import (
     HumanMessage,
     AIMessage,
     SystemMessage,
 )
-from torch import Tensor
 from langchain_core.runnables.graph_mermaid import MermaidDrawMethod
 from langchain_postgres.vectorstores import PGVector
 from langgraph.prebuilt import create_react_agent
@@ -37,6 +35,7 @@ from typing import Annotated
 from typing_extensions import TypedDict, Tuple
 
 chats_by_session_id = {}
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 class State(TypedDict):
@@ -132,8 +131,7 @@ class LangGraphHandler:
 
     def chatbot_handler(self, user_query: str) -> Tuple[str, int]:
         """Handles the chatbot interaction."""
-        chat_history = self._get_chat_history()
-        chat_history.add_user_message(user_query)
+
         system_message = SystemMessage(
             content="""
         You are an AI assistant called Vita Samara. Your task is to assist the user with their queries. You have access
@@ -193,7 +191,6 @@ class LangGraphHandler:
 
         self.summary = self._update_summary(user_query, ai_response)
         self._save_summary_to_db(self.summary)
-        self.add_to_chat_vector_store(user_query, ai_response)
 
         return ai_response, int(evaluation)
 
@@ -270,14 +267,6 @@ class LangGraphHandler:
                 summary=summary,
             )
 
-    def _get_chat_history(self) -> InMemoryChatMessageHistory:
-        """Get chat history from the database."""
-        chat_history = chats_by_session_id.get(self.telegram_id)
-        if chat_history is None:
-            chat_history = InMemoryChatMessageHistory()
-            chats_by_session_id[self.telegram_id] = chat_history
-        return chat_history
-
     def _evaluate_response(self, user_query, ai_response) -> str:
         "evaluate response against query"
         print("Evaluating response...")
@@ -298,21 +287,6 @@ class LangGraphHandler:
         print(f"Response accuracy: {evaluation['evaluation_success']} %")
 
         return evaluation["evaluation_success"]
-
-    @staticmethod
-    def create_embedding(user_query: str, ai_response: str) -> Tensor:
-        """Create an embedding for the given text."""
-        text = f"User: {user_query}, AI: {ai_response}"
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        embedding = model.encode(text)
-        return embedding
-
-    @staticmethod
-    def create_user_query_embedding(user_query: str) -> Tensor:
-        """Create an embedding for the user query."""
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        embedding = model.encode(user_query)
-        return embedding
 
     def add_to_chat_vector_store(self, user_query: str, ai_response: str) -> None:
         """Add the user query and AI response to the chat vector store."""

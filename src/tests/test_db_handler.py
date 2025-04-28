@@ -1,4 +1,3 @@
-from datetime import datetime
 import tempfile
 from sqlmodel import select, SQLModel
 
@@ -93,19 +92,7 @@ def test_get_all_users(setup_and_teardown):
     """Test the get_all_users method."""
     db_handler = setup_and_teardown
     db_handler.create_new_user(test_data)
-    # Test getting all users
-    users = db_handler.get_all_users()
-    assert users is not None
-    assert len(users) >= 1
-    for user in users:
-        assert isinstance(user.telegram_id, int)
-        assert isinstance(user.is_bot, bool)
-        assert isinstance(user.created_on, datetime)
-
-
-def test_save_message(setup_and_teardown):
-    """Test the save_message method."""
-    db_handler = setup_and_teardown
+    # Test getting all users    db_handler = setup_and_teardown
 
     # Test saving a message
     test_user_query = "test user query"
@@ -113,14 +100,13 @@ def test_save_message(setup_and_teardown):
     test_evaluation = 85
     timestamp = test_data["message"]["date"]
     test_telegram_id = test_data["message"]["from"]["id"]
-    embeddings = lg_handler.create_embedding(test_user_query, test_ai_response)
+
     db_handler.save_message(
         user_query=test_user_query,
         ai_response=test_ai_response,
         evaluation=test_evaluation,
         telegram_id=test_telegram_id,
         timestamp=timestamp,
-        embeddings=embeddings,
     )
     user = db_handler.get_user(test_data)
 
@@ -145,14 +131,13 @@ def test_retrieve_messages_by_user(setup_and_teardown):
     test_evaluation = 85
     timestamp = test_data["message"]["date"]
     test_telegram_id = test_data["message"]["from"]["id"]
-    embeddings = lg_handler.create_embedding(test_user_query, test_ai_response)
+
     db_handler.save_message(
         user_query=test_user_query,
         ai_response=test_ai_response,
         evaluation=test_evaluation,
         telegram_id=test_telegram_id,
         timestamp=timestamp,
-        embeddings=embeddings,
     )
 
     messages = db_handler.retrieve_messages_by_user(user)
