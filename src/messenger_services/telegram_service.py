@@ -4,7 +4,6 @@ import requests
 from dotenv import load_dotenv
 from fastapi import Request, APIRouter
 
-from src.crud.db_handler import DataBaseHandler
 from src.services.langgraph_handler import LangGraphHandler
 
 telegram_routes = APIRouter()
@@ -18,7 +17,6 @@ async def telegram_webhook(req: Request):
     data = await req.json()
     telegram_id = data["message"]["from"]["id"]
     user_query = data.get("message", {}).get("text")
-    timestamp = data.get("message", {}).get("date")
     if not user_query or not isinstance(user_query, str):
         response = requests.post(
             message_url,
@@ -36,16 +34,6 @@ async def telegram_webhook(req: Request):
     response = requests.post(
         message_url, json={"chat_id": telegram_id, "text": ai_response}
     )
-    embeddings = lbh.create_embedding(user_query=user_query, ai_response=ai_response)
-    with DataBaseHandler() as db_handler:
-        db_handler.save_message(
-            telegram_id=telegram_id,
-            user_query=user_query,
-            ai_response=ai_response,
-            evaluation=evaluation,
-            embeddings=embeddings,
-            timestamp=timestamp,
-        )
 
     return {
         "Status": response.status_code,
