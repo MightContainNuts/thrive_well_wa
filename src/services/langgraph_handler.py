@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.state import CompiledGraph
-from langgraph.graph.message import add_messages
+from langchain.agents import Tool
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import (
@@ -23,6 +23,7 @@ from src.services.tools import (
     calendar_events_handler,
 )
 from src.crud.db_handler import DataBaseHandler
+from src.services.schemas import State, IsValid, EvaluationResponse
 
 from sentence_transformers import SentenceTransformer
 
@@ -31,35 +32,13 @@ from pathlib import Path
 import json
 import os
 
-from typing import Annotated
-from typing_extensions import TypedDict, Tuple
+from typing_extensions import Tuple
 
 import numpy.typing as npt
 import numpy as np
 
 chats_by_session_id = {}
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-
-class State(TypedDict):
-    """State of the workflow."""
-
-    messages: Annotated[list, add_messages]
-    metadata: dict
-    telegram_id: int
-    summary: str | None
-
-
-class IsValid(TypedDict):
-    """Validation response."""
-
-    is_valid: bool
-
-
-class EvaluationResponse(TypedDict):
-    """Evaluation response."""
-
-    evaluation_success: int
 
 
 class LangGraphHandler:
@@ -110,24 +89,6 @@ class LangGraphHandler:
             state["metadata"]["is_valid"] = True
             return state
 
-    def refine_prompt(self, state: State) -> State:
-        """Improves the prompt for the agent."""
-        print("Improving prompt...")
-        print(f"User query: {state['messages'][-1].content}")
-        user_message = (
-            state["messages"][-1].content
-            if isinstance(state["messages"][-1], HumanMessage)
-            else ""
-        )
-        prompt = f"""
-        You are an AI assistant. Your task is to improve the user's query {user_message}
-        to make it more specific and clear. Provide a revised version of the query.
-        """
-        improved_prompt = self.llm.invoke([SystemMessage(content=prompt)])
-        print(f"Improved prompt: {improved_prompt.content}")
-        state["messages"].append(HumanMessage(content=improved_prompt.content))
-        return state
-
     def create_agent(self) -> CompiledGraph:
         """Creates a new agent."""
         print("Creating agent...")
@@ -154,7 +115,7 @@ class LangGraphHandler:
         except Exception as e:
             print(f"Failed to generate graph: {e}")
 
-    def chatbot_handler(self, user_query: str) -> Tuple[str, int]:
+    def chatbot_handler(self, user_query: str, timestamp: int) -> Tuple[str, int]:
         """Handles the chatbot interaction."""
         system_message = SystemMessage(
             content="""
@@ -190,7 +151,14 @@ class LangGraphHandler:
         evaluation = self._evaluate_response(
             user_query=user_query, ai_response=ai_response
         )
-
+        with DataBaseHandler() as db_handler:
+            db_handler.save_message(
+                user_query=user_query,
+                ai_response=ai_response,
+                evaluation=int(evaluation),
+                telegram_id=self.telegram_id,
+                timestamp=timestamp,
+            )
         self.summary = self._update_summary(user_query, ai_response)
         self._save_summary_to_db(self.summary)
 
@@ -234,18 +202,14 @@ class LangGraphHandler:
         agent = self.create_agent()
 
         workflow.add_node("validate_query", self.validate_query)
-        workflow.add_node("refine_prompt", self.refine_prompt)
         workflow.add_node("agent", agent)
 
         workflow.add_edge(START, "validate_query")
 
         workflow.add_conditional_edges(
             "validate_query",
-            lambda state: "refine_prompt"
-            if state["metadata"].get("is_valid", True)
-            else END,
+            lambda state: "agent" if state["metadata"].get("is_valid", True) else END,
         )
-        workflow.add_edge("refine_prompt", "agent")
         workflow.add_edge("agent", END)
 
         return workflow.compile()
@@ -257,7 +221,7 @@ class LangGraphHandler:
         Previous summary: {self.summary}
         New exchange:
         User: {user_query}, AI: {ai_response} ,
-        Provide a concise summary of the entire conversation so far. Mote Places, dates, names, and other entities
+        Provide a concise summary of the entire conversation so far. Note Places, dates, names, and other entities
         """
         # Generate new summary
         new_summary = self.llm.invoke([HumanMessage(content=summary_prompt)])
@@ -326,6 +290,19 @@ class LangGraphHandler:
         )
         return results
 
+    def refine_prompt(self, user_query) -> str:
+        """Improves the prompt for the agent for more specific and clear queries."""
+        print("Improving prompt...")
+        print(f"User query: {user_query}")
+
+        prompt = f"""
+        You are an AI assistant. Your task is to improve the user's query {user_query}
+        to make it more specific and clear. Provide a revised version of the query.
+        """
+        improved_prompt = self.llm.invoke([SystemMessage(content=prompt)]).content
+        print(f"Improved prompt: {improved_prompt}")
+        return improved_prompt
+
     @staticmethod
     def _vector_store_history() -> PGVector:
         """creates a vector store for the chat history"""
@@ -340,7 +317,13 @@ class LangGraphHandler:
 
     def _tools(self):
         """Create tools for the agent."""
+
         return [
+            Tool.from_function(
+                func=self.refine_prompt,
+                name="refine_prompt",
+                description="Improves vague or unclear user queries before sending them to the main agent",
+            ),
             self.history_retriever_tool(),
             get_weather,
             get_wiki_summary,
@@ -380,11 +363,3 @@ class EmbeddingFunctionWrapper(Embeddings):
     def embed_query(self, text: str) -> Tensor:
         # For single query embedding
         return self.model.encode(text, convert_to_tensor=False)
-
-
-if __name__ == "__main__":
-    # Example usage
-    inputs = {"messages": [("user", "who built you?")]}
-
-    handler = LangGraphHandler(telegram_id=123456789)
-    result = handler.chatbot_handler("What is the weather like in New York?")

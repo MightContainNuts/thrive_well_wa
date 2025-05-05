@@ -5,52 +5,28 @@ from sqlmodel import select, SQLModel
 from src.crud.db_handler import DataBaseHandler
 from src.services.langgraph_handler import LangGraphHandler
 from src.models.models import User, Message
+from src.services.schemas import IncomingMessage, ChatModel, FromModel
 import pytest
 
 lg_handler = LangGraphHandler()
 
-test_data = {
-    "update_id": 292484130,
-    "message": {
-        "message_id": 22,
-        "from": {
-            "id": 7594929889,
-            "is_bot": False,
-            "first_name": "Dean",
-            "last_name": "Didion",
-            "language_code": "en",
-        },
-        "chat": {
-            "id": 7594929889,
-            "first_name": "Dean",
-            "last_name": "Didion",
-            "type": "private",
-        },
-        "date": 1745060257,
-        "text": "text testing",
-    },
-}
 
-bot_test_data = {
-    "ok": True,
-    "result": {
-        "message_id": 26,
-        "from": {
-            "id": 8116057140,
-            "is_bot": True,
-            "first_name": "vita.samaya",
-            "username": "vita_samaya_bot",
-        },
-        "chat": {
-            "id": 7594929889,
-            "first_name": "Dean",
-            "last_name": "Didion",
-            "type": "private",
-        },
-        "date": 1745060513,
-        "text": "Hey, I received your message!",
-    },
-}
+test_data = IncomingMessage(
+    message_id=12345678,
+    from_=FromModel(
+        id=8116057140,
+        is_bot=True,
+        first_name="vita.samaya",
+        last_name="bot",
+        user_name="vita_samaya_bot",
+        language_code="en",
+    ),
+    chat=ChatModel(
+        id=8116057140, first_name="vita.samaya", last_name="bot", type="private"
+    ),
+    query="Hello, What's the difference between a duck?",
+    date=1714912345,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -69,10 +45,10 @@ def test_create_new_user(setup_and_teardown):
     # Test the creation of a new user
     user = db_handler.create_new_user(test_data)
     assert user is not None
-    assert user.telegram_id == test_data["message"]["from"]["id"]
-    assert user.first_name == test_data["message"]["from"]["first_name"]
-    assert user.last_name == test_data["message"]["from"]["last_name"]
-    assert user.is_bot == test_data["message"]["from"]["is_bot"]
+    assert user.telegram_id == test_data.from_.id
+    assert user.first_name == test_data.from_.first_name
+    assert user.last_name == test_data.from_.last_name
+    assert user.is_bot == test_data.from_.is_bot
 
 
 def test_get_user(setup_and_teardown):
@@ -83,10 +59,10 @@ def test_get_user(setup_and_teardown):
     user = db_handler.get_user(test_data)
     print(user)
     assert user is not None
-    assert user.telegram_id == test_data["message"]["from"]["id"]
-    assert user.first_name == test_data["message"]["from"]["first_name"]
-    assert user.last_name == test_data["message"]["from"]["last_name"]
-    assert user.is_bot == test_data["message"]["from"]["is_bot"]
+    assert user.telegram_id == test_data.from_.id
+    assert user.first_name == test_data.from_.first_name
+    assert user.last_name == test_data.from_.last_name
+    assert user.is_bot == test_data.from_.is_bot
 
 
 def test_get_all_users(setup_and_teardown):
@@ -111,16 +87,14 @@ def test_save_message(setup_and_teardown):
     test_user_query = "test user query"
     test_ai_response = "test ai response"
     test_evaluation = 85
-    timestamp = test_data["message"]["date"]
-    test_telegram_id = test_data["message"]["from"]["id"]
-    embeddings = lg_handler.create_embedding(test_user_query, test_ai_response)
+    test_telegram_id = test_data.from_.id
+    timestamp = test_data.date
     db_handler.save_message(
+        telegram_id=test_telegram_id,
         user_query=test_user_query,
         ai_response=test_ai_response,
         evaluation=test_evaluation,
-        telegram_id=test_telegram_id,
         timestamp=timestamp,
-        embeddings=embeddings,
     )
     user = db_handler.get_user(test_data)
 
@@ -143,16 +117,14 @@ def test_retrieve_messages_by_user(setup_and_teardown):
     test_user_query = "test user query"
     test_ai_response = "test ai response"
     test_evaluation = 85
-    timestamp = test_data["message"]["date"]
-    test_telegram_id = test_data["message"]["from"]["id"]
-    embeddings = lg_handler.create_embedding(test_user_query, test_ai_response)
+    timestamp = test_data.date
+    test_telegram_id = test_data.from_.id
     db_handler.save_message(
         user_query=test_user_query,
         ai_response=test_ai_response,
         evaluation=test_evaluation,
         telegram_id=test_telegram_id,
         timestamp=timestamp,
-        embeddings=embeddings,
     )
 
     messages = db_handler.retrieve_messages_by_user(user)

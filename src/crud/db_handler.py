@@ -1,12 +1,12 @@
 import os
 from datetime import datetime
 from typing import Optional
-from torch import Tensor
 
 from dotenv import load_dotenv
 from sqlmodel import SQLModel, create_engine, Session, select
 
 from src.models.models import User, Message  # noqa: F401  # Needed for table creation
+from src.services.schemas import IncomingMessage
 
 load_dotenv()
 db_url_prod = os.getenv("DATABASE_URL")
@@ -67,15 +67,13 @@ class DataBaseHandler:
         """
         pass
 
-    def create_new_user(self, message_data: dict) -> User:
+    def create_new_user(self, payload: IncomingMessage) -> User:
         """Create a new user in the database."""
-        telegram_id = message_data.get("message", {}).get("from", {}).get("id")
-        first_name = (
-            message_data.get("message", {}).get("from", {}).get("first_name", "")
-        )
-        last_name = message_data.get("message", {}).get("from", {}).get("last_name", "")
-        user_name = message_data.get("message", {}).get("from", {}).get("username", "")
-        is_bot = message_data.get("message", {}).get("from", {}).get("is_bot")
+        telegram_id = payload.from_.id
+        first_name = payload.from_.first_name
+        last_name = payload.from_.last_name
+        user_name = payload.from_.user_name
+        is_bot = payload.from_.is_bot
 
         chat_summary = (
             f"User Created: {telegram_id}: {last_name}, {first_name} - {datetime.now()}"
@@ -93,18 +91,54 @@ class DataBaseHandler:
         self.session.commit()
         return new_user
 
-    def get_user(self, message_data: dict, create_if_missing: bool = True) -> User:
+    def update_user(self, payload: IncomingMessage) -> User:
+        """Update an existing user in the database."""
+        telegram_id = payload.from_.id
+        first_name = payload.from_.first_name
+        last_name = payload.from_.last_name
+        user_name = payload.from_.user_name
+        is_bot = payload.from_.is_bot
+
+        user = self.session.exec(
+            select(User).where(User.telegram_id == telegram_id)
+        ).first()
+        if user:
+            update = False
+            if user.first_name != first_name:
+                print(f"Updating user: {user.first_name} {user.last_name}")
+                user.first_name = first_name
+                update = True
+            if user.last_name != last_name:
+                print(f"Updating user: {user.first_name} {user.last_name}")
+                user.last_name = last_name
+                update = True
+            if user.user_name != user_name:
+                print(f"Updating user: {user.first_name} {user.last_name}")
+                user.user_name = user_name
+                update = True
+            if user.is_bot != is_bot:
+                print(f"Updating user: is_bot: {is_bot}")
+                user.is_bot = is_bot
+                update = True
+            if update:
+                user.chat_summary = f"User Updated: {telegram_id}: {last_name}, {first_name} - {datetime.now()}"
+                self.session.commit()
+        return user
+
+    def get_user(
+        self, payload: IncomingMessage, create_if_missing: bool = True
+    ) -> User:
         """Get a user by telegram id."""
-        telegram_id = message_data.get("message", {}).get("from", {}).get("id")
+        telegram_id = payload.from_.id
         print(f"Telegram ID: {telegram_id}")
         user = self.session.exec(
             select(User).where(User.telegram_id == telegram_id)
         ).first()
         if user is None and create_if_missing:
             print(f"User with ID {telegram_id} not found.")
-            user = self.create_new_user(message_data)
-
+            user = self.create_new_user(payload)
         else:
+            user = self.update_user(payload=payload)
             print(f"User found: {user.user_id} {user.telegram_id}")
         return user
 
@@ -131,7 +165,6 @@ class DataBaseHandler:
         ai_response: str,
         evaluation: int,
         timestamp: int,
-        embeddings: Tensor,
     ) -> None:
         """Save a message to the database."""
 
@@ -141,7 +174,6 @@ class DataBaseHandler:
             ai_response=ai_response,
             evaluation=evaluation,
             timestamp=timestamp,
-            embeddings=embeddings,
         )
         self.session.add(new_message)
         self.session.commit()
@@ -158,7 +190,7 @@ class DataBaseHandler:
 
     def retrieve_message_by_user_timestamp(
         self, user: User, timestamp: int
-    ) -> Optional[str]:
+    ) -> Optional[Message]:
         """Retrieve messages for a given telegram id."""
         result = self.session.exec(
             select(Message).where(
@@ -209,7 +241,9 @@ class DataBaseHandler:
             select(User).where(User.telegram_id == 8116057140)
         ).first()
         messages = self.session.exec(
-            select(Message).where(Message.telegram_id == bot.telegram_id)
+            select(IncomingMessage).where(
+                IncomingMessage.telegram_id == bot.telegram_id
+            )
         ).all()
         for message in messages:
             self.session.delete(message)
