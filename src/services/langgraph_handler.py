@@ -1,7 +1,6 @@
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.state import CompiledGraph
 from langchain.agents import Tool
-from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import (
     HumanMessage,
@@ -32,7 +31,7 @@ from pathlib import Path
 import json
 import os
 
-from typing_extensions import Tuple
+from typing_extensions import Tuple, List
 
 import numpy.typing as npt
 import numpy as np
@@ -58,6 +57,7 @@ class LangGraphHandler:
         self.workflow = self._build_workflow()
         self.guidelines = self._load_guidelines()
         self.vector_store_history = self._vector_store_history()
+        self.vector_store_support_docs = self._vector_store_support_docs()
 
     def validate_query(self, state: State) -> State:
         print("Validating query against ethical guidelines...")
@@ -101,13 +101,11 @@ class LangGraphHandler:
         try:
             # Get the Mermaid diagram source
             mermaid_src = self.workflow.get_graph().draw_mermaid()
-
             # Optional: Print or inspect the Mermaid source
             print("Mermaid diagram source:\n", mermaid_src)
 
             # Save it to PNG using the Mermaid source
             png_data = self.workflow.get_graph(xray=True).draw_mermaid_png()
-
             with open("workflow_graph.png", "wb") as f:
                 f.write(png_data)
             print("Graph saved as workflow_graph.png")
@@ -120,7 +118,9 @@ class LangGraphHandler:
         system_message = SystemMessage(
             content="""
         You are an AI assistant called Vita Samara. Your task is to assist the user with their queries. Answer the
-        questions where appropriate and provide relevant information. Be precise and concise.
+        questions where appropriate and provide relevant information. Be precise and concise. You have access to the
+        chat history and the support documentation via tools in the agent. You can also use the additiona tools provided
+        to assist the user.
         """
         )
         print("processing user query...")
@@ -161,11 +161,12 @@ class LangGraphHandler:
             )
         self.summary = self._update_summary(user_query, ai_response)
         self._save_summary_to_db(self.summary)
+        self.add_to_vector_store_history(user_query, ai_response)
 
         return ai_response, int(evaluation)
 
     def main(self, user_query: str):
-        response = self.chatbot_handler(user_query)
+        response = self.chatbot_handler(user_query, timestamp=1699999999)
         print(response)
 
     @staticmethod
@@ -237,57 +238,48 @@ class LangGraphHandler:
                 summary=summary,
             )
 
-    def _get_chat_history(self) -> InMemoryChatMessageHistory:
-        """Get chat history from the database."""
-        chat_history = chats_by_session_id.get(self.telegram_id)
-        if chat_history is None:
-            chat_history = InMemoryChatMessageHistory()
-            chats_by_session_id[self.telegram_id] = chat_history
-        return chat_history
-
     def _evaluate_response(self, user_query, ai_response) -> str:
         "evaluate response against query"
         print("Evaluating response...")
-
         evaluation_prompt = f"""
-
         Evaluate, how well the generated response {ai_response} fulfills the given query {user_query}.
         Compares the generated response to the input query and calculate the degree to which the response satisfies the
         query's intent and content. The result (evaluation_success) is returned as an integer between 0 and 100, where 100
         indicates a perfect match and lower values indicate partial fulfillment of the query.
         """
         structured_output = self.llm.with_structured_output(EvaluationResponse)
-
         evaluation = structured_output.invoke(
             [SystemMessage(content=evaluation_prompt)]
         )
-
         print(f"Response accuracy: {evaluation['evaluation_success']} %")
-
         return evaluation["evaluation_success"]
 
-    @staticmethod
-    def create_embedding(user_query: str, ai_response: str) -> Tensor:
-        """Create an embedding for the given text."""
-        text = f"User: {user_query}, AI: {ai_response}"
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        embedding = model.encode(text)
-        return embedding
-
-    @staticmethod
-    def create_user_query_embedding(user_query: str) -> Tensor:
-        """Create an embedding for the user query."""
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        embedding = model.encode(user_query)
-        return embedding
-
     def search_chat_history(self, user_query: str) -> list[tuple[Document, float]]:
-        """Search the chat history for relevant messages."""
+        """Search the chat history for a specific user based on the query."""
         print("Searching chat history...")
+        metadata_filter = {"telegram_id": self.telegram_id}
+        results = self.vector_store_history.similarity_search_with_score(
+            query=user_query,
+            filter=metadata_filter,
+            k=5,
+        )
+        if not results:
+            print("No results found in chat history")
+        else:
+            print("Results found in chat history")
+        return results
+
+    def search_support_docs(self, user_query: str) -> list[tuple[Document, float]]:
+        """Search the support documentation for mental health issues"""
+        print("Searching support documentation...")
         results = self.vector_store_history.similarity_search_with_score(
             query=user_query,
             k=5,
         )
+        if not results:
+            print("No results found in support documentation")
+        else:
+            print("Results found in support documentation.")
         return results
 
     def refine_prompt(self, user_query) -> str:
@@ -315,9 +307,26 @@ class LangGraphHandler:
             embeddings=EmbeddingFunctionWrapper("all-MiniLM-L6-v2"),
         )
 
+    @staticmethod
+    def _vector_store_support_docs() -> PGVector:
+        """creates a vector store mental_health_docs"""
+        load_dotenv()
+        connection_string = os.getenv("DATABASE_URL")
+        return PGVector(
+            connection=connection_string,
+            collection_name="mental_health_docs",
+            use_jsonb=True,
+            embeddings=EmbeddingFunctionWrapper("all-MiniLM-L6-v2"),
+        )
+
+    def create_text_embedding(self, text: str) -> list[float]:
+        """Creates an embedding for the user query."""
+        print("Creating text embedding...")
+        embedding = self.vector_store_history.embeddings.embed_query(text)
+        return embedding
+
     def _tools(self):
         """Create tools for the agent."""
-
         return [
             Tool.from_function(
                 func=self.refine_prompt,
@@ -325,6 +334,7 @@ class LangGraphHandler:
                 description="Improves vague or unclear user queries before sending them to the main agent",
             ),
             self.history_retriever_tool(),
+            self.support_docs_retriever_tool(),
             get_weather,
             get_wiki_summary,
             get_tavily_search_tool,
@@ -334,7 +344,6 @@ class LangGraphHandler:
     def history_retriever_tool(self):
         """Create a retriever tool for the agent."""
         print("Creating history retriever tool...")
-
         history_retriever = self._vector_store_history().as_retriever()
         return create_retriever_tool(
             retriever=history_retriever,
@@ -343,13 +352,40 @@ class LangGraphHandler:
                         "ones.""",
         )
 
-    def print_stream(self, stream):
-        for s in stream:
-            message = s["messages"][-1]
-            if isinstance(message, tuple):
-                print(message)
-            else:
-                message.pretty_print()
+    def support_docs_retriever_tool(self):
+        """Create a retriever tool for the agent."""
+        print("Creating support doc retriever tool...")
+        support_doc_retriever = self._vector_store_support_docs().as_retriever()
+        return create_retriever_tool(
+            retriever=support_doc_retriever,
+            name="retrieve_support_docs",
+            description="""Check the mental health support documentation for similar messages top the user prompt and
+            return the most relevant ones.""",
+        )
+
+    def add_to_vector_store_history(self, user_query: str, ai_response: str) -> None:
+        """Embeds and stores the user query and AI response into the vector store."""
+        print("Adding user query and AI response to vector store history...")
+
+        combined_text = f"User: {user_query}\nAI: {ai_response}"
+        document = Document(
+            page_content=combined_text,
+            metadata={
+                "telegram_id": self.telegram_id,
+            },
+        )
+        print(f"Document: {document}")
+        self.vector_store_history.add_documents(
+            documents=[document],
+        )
+
+    def add_to_vector_store_support_docs(self, split_docs: List[Document]) -> None:
+        """Embeds and stores the user query and AI response into the vector store."""
+        print("Adding user query and AI response to vector store support docs...")
+
+        self.vector_store_support_docs.add_documents(
+            documents=split_docs,
+        )
 
 
 class EmbeddingFunctionWrapper(Embeddings):
@@ -363,3 +399,9 @@ class EmbeddingFunctionWrapper(Embeddings):
     def embed_query(self, text: str) -> Tensor:
         # For single query embedding
         return self.model.encode(text, convert_to_tensor=False)
+
+
+if __name__ == "__main__":
+    lbh = LangGraphHandler(9999999999)
+    timestamp = 1699999999
+    lbh.main("Using the chat history - do you know what my name is?")
