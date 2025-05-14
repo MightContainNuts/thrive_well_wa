@@ -36,7 +36,7 @@ class User(SQLModel, table=True):
     )
     is_bot: bool = Field(default=False, nullable=False)
     chat_summary: str = Field(default=None, nullable=False)
-    messages: list["Message"] = Relationship(back_populates="user")
+    messages: list["Message"] = Relationship(back_populates="user", cascade_delete=True)
 
 
 class Message(SQLModel, table=True):
