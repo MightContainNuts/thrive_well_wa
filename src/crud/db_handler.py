@@ -1,15 +1,13 @@
-import os
 from datetime import datetime
 from typing import Optional
 
-from dotenv import load_dotenv
 from sqlmodel import SQLModel, create_engine, Session, select
 
 from src.models.models import User, Message  # noqa: F401  # Needed for table creation
-from src.services.schemas import IncomingMessage
+from src.services.schemas import IncomingMessage, settings
 
-load_dotenv()
-db_url_prod = os.getenv("DATABASE_URL")
+
+db_url_prod = settings.DATABASE_URL
 
 
 class DataBaseHandler:

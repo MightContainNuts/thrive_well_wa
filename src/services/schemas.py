@@ -2,6 +2,9 @@ from typing import Optional, TypedDict, Annotated
 
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from pathlib import Path
 
 
 # Telegram schemas for incoming and response messages
@@ -65,3 +68,31 @@ class EvaluationResponse(TypedDict):
     """Evaluation response."""
 
     evaluation_success: int
+
+
+class Settings(BaseSettings):
+    """Settings for the application."""
+
+    SECRET_KEY: str
+    DATABASE_URL: str
+
+    # Telegram settings
+    TELEGRAM_BOT_TOKEN: str
+    # Tools
+    OPENWEATHERMAP_API_KEY: str
+    TAVILY_API_KEY: str
+    # AI Keys
+    OPENAI_API_KEY: str
+    GEMINI_API_KEY: str
+
+    # Constants
+    TOKENIZERS_PARALLELISM: bool = False
+
+    model_config = SettingsConfigDict(
+        env_file=Path(__file__).parent.parent.parent / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+settings = Settings()

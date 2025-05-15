@@ -22,7 +22,7 @@ from src.services.tools import (
     calendar_events_handler,
 )
 from src.crud.db_handler import DataBaseHandler
-from src.services.schemas import State, IsValid, EvaluationResponse
+from src.services.schemas import State, IsValid, EvaluationResponse, settings
 
 from sentence_transformers import SentenceTransformer
 
@@ -37,12 +37,10 @@ import numpy.typing as npt
 import numpy as np
 
 chats_by_session_id = {}
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 class LangGraphHandler:
     def __init__(self, telegram_id: int = 0):
-        load_dotenv()
         try:
             self.telegram_id = telegram_id
         except TypeError:
@@ -310,8 +308,7 @@ class LangGraphHandler:
     @staticmethod
     def _vector_store_support_docs() -> PGVector:
         """creates a vector store mental_health_docs"""
-        load_dotenv()
-        connection_string = os.getenv("DATABASE_URL")
+        connection_string = settings.DATABASE_URL
         return PGVector(
             connection=connection_string,
             collection_name="mental_health_docs",
@@ -403,5 +400,5 @@ class EmbeddingFunctionWrapper(Embeddings):
 
 if __name__ == "__main__":
     lbh = LangGraphHandler(9999999999)
-    timestamp = 1699999999
+    timestamp_demo = 1699999999
     lbh.main("Using the chat history - do you know what my name is?")
